@@ -1,24 +1,17 @@
 package dev.kord.ketf.decoder
 
 import dev.kord.ketf.EtfTag
-import kotlinx.serialization.CompositeDecoder
-import kotlinx.serialization.SerialDescriptor
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.UpdateMode
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.modules.SerializersModule
 import java.nio.ByteBuffer
 
 class EtfMapLikeDecoder(
     buffer: ByteBuffer,
-    context: SerialModule,
+    serializersModule: SerializersModule,
     private val pairSize: Int
-) : EtfDecoder(buffer, context) {
-
-    override val context: SerialModule
-        get() = super.context
-    override val updateMode: UpdateMode
-        get() = super.updateMode
-
+) : EtfDecoder(buffer, serializersModule) {
     private var currentIndex = -1
 
     override fun decodeSequentially(): Boolean = false
@@ -28,7 +21,7 @@ class EtfMapLikeDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         currentIndex += 1
 
-        if (currentIndex == pairSize) return CompositeDecoder.READ_DONE
+        if (currentIndex == pairSize) return CompositeDecoder.DECODE_DONE
 
         val name = when (val tag = nextTag()) {
             EtfTag.ATOM_UTF8_EXT -> getUtf8String(buffer.int)

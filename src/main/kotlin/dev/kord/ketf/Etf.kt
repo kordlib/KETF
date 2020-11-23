@@ -2,54 +2,75 @@ package dev.kord.ketf
 
 import dev.kord.ketf.decoder.EtfDecoder
 import dev.kord.ketf.encoder.EtfEncoder
+import dev.kord.ketf.encoder.writeAtom
 import dev.kord.ketf.encoder.writeByte
+import dev.kord.ketf.encoder.writeShort
 import kotlinx.serialization.*
-import kotlinx.serialization.modules.EmptyModule
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.modules.EmptySerializersModule
+import kotlinx.serialization.modules.SerializersModule
 import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 
 /**
  * @param initialDecodeBufferSize The initial buffer size in bytes used for decoding.
  */
 data class EtfConfig(
-    val initialDecodeBufferSize: Int = 2000
+    val initialDecodeBufferSize: Int = 2000,
+    val keyEncoder: KeyEncoder = KeyEncoder.AsString
 ) {
+    sealed class KeyEncoder {
+        abstract fun OutputStream.encode(key: String)
+
+        object AsAtom: KeyEncoder() {
+            override fun OutputStream.encode(key: String) = writeAtom(key)
+        }
+
+        object AsString: KeyEncoder() {
+            override fun OutputStream.encode(key: String) {
+                writeByte(EtfTag.STRING_EXT)
+                val array = key.toByteArray(Charsets.US_ASCII)
+                writeShort(array.size)
+                write(array)
+            }
+        }
+
+    }
+
     companion object {
         val default = EtfConfig()
     }
 }
 
 class Etf(
-    override val context: SerialModule = EmptyModule,
+    override val serializersModule: SerializersModule = EmptySerializersModule,
     private val config: EtfConfig = EtfConfig.default
 ) : BinaryFormat {
 
-    override fun <T> dump(serializer: SerializationStrategy<T>, value: T): ByteArray {
+    override fun <T> encodeToByteArray(serializer: SerializationStrategy<T>, value: T): ByteArray {
         val outputStream = ByteArrayOutputStream(config.initialDecodeBufferSize)
-        outputStream.writeByte(131.toByte())
-        EtfEncoder(outputStream).encode(serializer, value)
+        outputStream.write(131)
+        EtfEncoder(outputStream).encodeSerializableValue(serializer, value)
         return outputStream.toByteArray()
     }
 
-    override fun <T> load(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T {
+    override fun <T> decodeFromByteArray(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T {
         val buffer = ByteBuffer.wrap(bytes)
         buffer.get() //skip version, I'm sure this is fine.
-        return EtfDecoder(buffer).decode(deserializer)
+        return EtfDecoder(buffer).decodeSerializableValue(deserializer)
     }
 
     companion object : BinaryFormat {
         private val default = Etf()
 
-        override val context: SerialModule
-            get() = EmptyModule
+        override val serializersModule: SerializersModule
+            get() = EmptySerializersModule
 
-        override fun <T> dump(serializer: SerializationStrategy<T>, value: T): ByteArray =
-            default.dump(serializer, value)
+        override fun <T> decodeFromByteArray(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T =
+            default.decodeFromByteArray(deserializer, bytes)
 
-        override fun <T> load(deserializer: DeserializationStrategy<T>, bytes: ByteArray): T =
-            default.load(deserializer, bytes)
-
+        override fun <T> encodeToByteArray(serializer: SerializationStrategy<T>, value: T): ByteArray =
+            default.encodeToByteArray(serializer, value)
     }
 
 }

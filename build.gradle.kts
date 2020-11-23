@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.3.72"
-    kotlin("plugin.serialization") version "1.3.72"
+    kotlin("jvm") version "1.4.20"
+    kotlin("plugin.serialization") version "1.4.20"
     application
 }
 group = "dev.kord.ketf"
@@ -16,7 +16,7 @@ repositories {
 dependencies {
     testImplementation(kotlin("test-junit"))
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-runtime:0.20.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
 }
 
 tasks.withType<KotlinCompile> {

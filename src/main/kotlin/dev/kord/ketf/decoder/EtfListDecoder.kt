@@ -1,21 +1,16 @@
 package dev.kord.ketf.decoder
 
 import dev.kord.ketf.EtfTag
-import kotlinx.serialization.CompositeDecoder
-import kotlinx.serialization.SerialDescriptor
-import kotlinx.serialization.UpdateMode
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.modules.SerializersModule
 import java.nio.ByteBuffer
 
 class EtfListDecoder(
     buffer: ByteBuffer,
-    context: SerialModule,
+    serializersModule: SerializersModule,
     private val listSize: Int
-) : EtfDecoder(buffer, context) {
-    override val context: SerialModule
-        get() = super.context
-    override val updateMode: UpdateMode
-        get() = super.updateMode
+) : EtfDecoder(buffer, serializersModule) {
 
     private var currentIndex = -1
 
@@ -30,7 +25,7 @@ class EtfListDecoder(
         if (currentIndex < listSize) return currentIndex
 
         //if we're already past the nil tag, done
-        if (currentIndex > listSize) return CompositeDecoder.READ_DONE
+        if (currentIndex > listSize) return CompositeDecoder.DECODE_DONE
 
         //if the etf list is not proper the tail is a value
         if (peekTag() != EtfTag.NIL_EXT) return currentIndex
@@ -40,7 +35,7 @@ class EtfListDecoder(
         //If it does, we'll provide the nil tail as a value.
         val nullable = descriptor.getElementDescriptor(0).isNullable
         return if (nullable) currentIndex
-        else CompositeDecoder.READ_DONE
+        else CompositeDecoder.DECODE_DONE
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {

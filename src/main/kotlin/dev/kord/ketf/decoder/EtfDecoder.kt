@@ -1,26 +1,26 @@
 package dev.kord.ketf.decoder
 
 import dev.kord.ketf.EtfTag
-import kotlinx.serialization.*
-import kotlinx.serialization.builtins.AbstractDecoder
-import kotlinx.serialization.modules.EmptyModule
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.AbstractDecoder
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.modules.EmptySerializersModule
+import kotlinx.serialization.modules.SerializersModule
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-
+@ExperimentalSerializationApi
 @OptIn(ExperimentalUnsignedTypes::class)
 open class EtfDecoder(
     protected val buffer: ByteBuffer,
-    override val context: SerialModule = EmptyModule
+    override val serializersModule: SerializersModule = EmptySerializersModule
 ) : AbstractDecoder() {
-
-    override val updateMode: UpdateMode
-        get() = UpdateMode.BANNED
 
     protected fun peekTag(): Byte = buffer.get(buffer.position())
 
-    protected fun nextTag():Byte = buffer.get()
+    protected fun nextTag(): Byte = buffer.get()
 
     protected fun nextTag(tag: Byte): Byte {
         val nextTag = nextTag()
@@ -156,17 +156,6 @@ open class EtfDecoder(
 
     override fun decodeShort(): Short = decodeInt().toShort()
 
-    override fun decodeUnit() {
-        nextTag(EtfTag.SMALL_ATOM_UTF8_EXT)
-
-        val length = buffer.get().toInt()
-        val value = getUtf8String(length)
-
-        if (!value.equals("Unit", true)) {
-            throw SerializationException("Expected unit but got atom of '$value'")
-        }
-    }
-
     private fun decodeStringExt(): String {
         val length = buffer.short.toInt()
         val bytes = ByteArray(length)
@@ -188,7 +177,7 @@ open class EtfDecoder(
         }
     }
 
-    override fun beginStructure(descriptor: SerialDescriptor, vararg typeParams: KSerializer<*>): CompositeDecoder {
+    override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         return when (descriptor.kind) {
             PrimitiveKind.BOOLEAN,
             PrimitiveKind.BYTE,
@@ -199,22 +188,22 @@ open class EtfDecoder(
             PrimitiveKind.FLOAT,
             PrimitiveKind.DOUBLE,
             PrimitiveKind.STRING,
-            UnionKind.ENUM_KIND
+            SerialKind.ENUM,
             -> this
             StructureKind.LIST -> {
                 val tag = nextTag()
-                return when(tag) {
+                return when (tag) {
                     EtfTag.LIST_EXT -> {
                         val size = buffer.int
-                        EtfListDecoder(buffer, context, size)
+                        EtfListDecoder(buffer, serializersModule, size)
                     }
                     EtfTag.SMALL_TUPLE_EXT -> {
                         val size = buffer.get().toInt()
-                        EtfTupleDecoder(buffer, context, size)
+                        EtfTupleDecoder(buffer, serializersModule, size)
                     }
                     EtfTag.LARGE_TUPLE_EXT -> {
                         val size = buffer.int
-                        EtfTupleDecoder(buffer, context, size)
+                        EtfTupleDecoder(buffer, serializersModule, size)
                     }
                     else -> throw SerializationException("expected list-like tag but got ${tag}")
                 }
@@ -224,7 +213,7 @@ open class EtfDecoder(
             StructureKind.OBJECT
             -> {
                 nextTag(EtfTag.MAP_EXT)
-                EtfMapLikeDecoder(buffer, context, buffer.int)
+                EtfMapLikeDecoder(buffer, serializersModule, buffer.int)
             }
             PolymorphicKind.SEALED,
             PolymorphicKind.OPEN
@@ -243,7 +232,7 @@ open class EtfDecoder(
         }
 
         val name = getUtf8String(length)
-        return enumDescriptor.getElementIndexOrThrow(name)
+        return enumDescriptor.getElementIndex(name)
     }
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {

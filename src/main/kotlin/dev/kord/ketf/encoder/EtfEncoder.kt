@@ -1,13 +1,18 @@
 package dev.kord.ketf.encoder
 
 import dev.kord.ketf.EtfTag
-import kotlinx.serialization.*
-import kotlinx.serialization.modules.EmptyModule
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.descriptors.PolymorphicKind
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.StructureKind
+import kotlinx.serialization.encoding.CompositeEncoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.modules.EmptySerializersModule
+import kotlinx.serialization.modules.SerializersModule
 import java.io.OutputStream
-import kotlin.time.Duration
 
-fun SerialDescriptor.isMapLike() = when(kind) {
+fun SerialDescriptor.isMapLike() = when (kind) {
     StructureKind.CLASS,
     StructureKind.MAP,
     StructureKind.OBJECT
@@ -15,10 +20,10 @@ fun SerialDescriptor.isMapLike() = when(kind) {
     else -> false
 }
 
-internal inline fun OutputStream.writeByte(byte: Byte) = write(byte.toInt())
+internal fun OutputStream.writeByte(byte: Byte) = write(byte.toInt())
 
-internal inline fun OutputStream.writeAtom(content: String) {
-    val utf8 = content.toUtf8Bytes()
+internal fun OutputStream.writeAtom(content: String) {
+    val utf8 = content.encodeToByteArray()
     if (utf8.size <= 255) {
         writeByte(EtfTag.SMALL_ATOM_UTF8_EXT)
         write(utf8.size)
@@ -29,19 +34,19 @@ internal inline fun OutputStream.writeAtom(content: String) {
     write(utf8)
 }
 
-internal inline fun OutputStream.writeShort(short: Int) {
+internal fun OutputStream.writeShort(short: Int) {
     write(short ushr 8)
     write(short)
 }
 
-internal inline fun OutputStream.writeInt(int: Int) {
+internal fun OutputStream.writeInt(int: Int) {
     write(int ushr 24)
     write(int ushr 16)
     write(int ushr 8)
     write(int)
 }
 
-internal inline fun OutputStream.writeLong(long: Long) {
+internal fun OutputStream.writeLong(long: Long) {
     writeByte((long ushr 56).toByte())
     writeByte((long ushr 48).toByte())
     writeByte((long ushr 40).toByte())
@@ -52,15 +57,15 @@ internal inline fun OutputStream.writeLong(long: Long) {
     writeByte((long ushr 0).toByte())
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 class EtfEncoder(
     private val output: OutputStream,
-    override val context: SerialModule = EmptyModule
+    override val serializersModule: SerializersModule = EmptySerializersModule
 ) : CompositeEncoder, Encoder {
 
     override fun beginCollection(
         descriptor: SerialDescriptor,
         collectionSize: Int,
-        vararg typeSerializers: KSerializer<*>
     ): CompositeEncoder {
         when (descriptor.kind) {
             StructureKind.LIST -> {
@@ -88,7 +93,6 @@ class EtfEncoder(
 
     override fun beginStructure(
         descriptor: SerialDescriptor,
-        vararg typeSerializers: KSerializer<*>
     ): CompositeEncoder {
         when (descriptor.kind) {
             StructureKind.CLASS,
@@ -175,11 +179,6 @@ class EtfEncoder(
         encodeString(value)
     }
 
-    override fun encodeUnitElement(descriptor: SerialDescriptor, index: Int) {
-        if (descriptor.isMapLike()) output.writeAtom(descriptor.getElementName(index))
-        TODO("How do you encode a unit?")
-    }
-
     override fun endStructure(descriptor: SerialDescriptor) {
         if (descriptor.kind == StructureKind.LIST) {
             output.writeByte(EtfTag.NIL_EXT)
@@ -242,10 +241,6 @@ class EtfEncoder(
         val array = value.toByteArray(Charsets.US_ASCII)
         output.writeShort(array.size)
         output.write(array)
-    }
-
-    override fun encodeUnit() {
-        TODO("Imma be honest with you chief, I have no idea how to encode a unit")
     }
 
 }

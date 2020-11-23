@@ -1,9 +1,8 @@
 package dev.kord.ketf.decoder
 
-import kotlinx.serialization.CompositeDecoder
-import kotlinx.serialization.SerialDescriptor
-import kotlinx.serialization.UpdateMode
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.modules.SerializersModule
 import java.nio.ByteBuffer
 
 /**
@@ -11,14 +10,9 @@ import java.nio.ByteBuffer
  */
 class EtfTupleDecoder(
     buffer: ByteBuffer,
-    context: SerialModule,
+    serializersModule: SerializersModule,
     private val listSize: Int
-) : EtfDecoder(buffer, context) {
-    override val context: SerialModule
-        get() = super.context
-    override val updateMode: UpdateMode
-        get() = super.updateMode
-
+) : EtfDecoder(buffer, serializersModule) {
     private var currentIndex = -1
 
     override fun decodeSequentially(): Boolean = true
@@ -28,7 +22,7 @@ class EtfTupleDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         currentIndex += 1
 
-        return if (currentIndex == listSize) CompositeDecoder.READ_DONE
+        return if (currentIndex == listSize) CompositeDecoder.DECODE_DONE
         else currentIndex
     }
 
